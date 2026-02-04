@@ -430,12 +430,12 @@ This design allows:
 ## Redesign Process
 
 ### Early Correlation Concept
-![Initial correlation sketch](docs/images/Correlation_Logic_V1.png)
+![Initial correlation sketch](/images/Correlation_Logic_V1.png)
 
 This sketch represents my initial approach to alert grouping and time-based correlation.
 
 ### Revised Correlation Flow
-![Amended correlation sketch](docs/images/Correlation_Logic_V2.png)
-![Ammendment](docs/images/Correlation_Logic_V2a.png)
+![Amended correlation sketch](/images/Correlation_Logic_V2.png)
+![Ammendment](/images/Correlation_Logic_V2a.png)
 
 After implementing detectors, I refined the design to support sliding windows and incident extension.
