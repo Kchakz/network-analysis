@@ -1,33 +1,31 @@
 # network-analysis
 
+---
 
-# 🔐 Network Security Correlation Engine
+## **📘 network-analysis**
 
-## Overview
+# Network Security Analysis & Correlation Engine
 
-This project is a **network security correlation engine** designed to ingest parsed network events, apply multiple independent detectors, and correlate their outputs into higher-confidence **security incidents**.
+This repository contains a **network security analysis system** that parses network logs, generates detector alerts, and correlates them into **structured security incidents**. The system demonstrates applied detection engineering, temporal reasoning, and multi-signal incident construction — all designed to feel closer to real SOC workflows than simple script logic.
 
-Rather than relying on a single alert type, the engine combines signals such as authentication abuse, suspicious port activity, and beaconing behavior to identify coordinated or sustained malicious activity across time.
-
-The project was built as a **portfolio-grade system**, emphasizing:
-
-* clear detection logic
-* explainable correlation rules
-* extensibility
-* realistic incident modeling
+The correlation logic itself — while a key part — is one component in a full pipeline of log ingestion, normalization, detection, and incident generation.
 
 ---
 
-## Key Goals
+## 🚀 Project Summary
 
-* Detect suspicious activity using **multiple independent detectors**
-* Correlate alerts across **time windows and shared network context**
-* Reduce noise by promoting only **multi-signal incidents**
-* Produce structured incidents suitable for SOC-style analysis
+Many security systems generate hundreds or thousands of *alerts*, but struggle to combine related events into meaningful *incidents*. This project tackles that problem by:
+
+* Parsing structured network logs
+* Applying **multiple independent detectors**
+* Correlating the resulting alerts based on time, source/destination, and detector diversity
+* Producing **incident summaries** that aggregate evidence over time
+
+This workflow is closer to how real Security Operations Centers (SOCs) reason about ongoing intrusion activity.
 
 ---
 
-## High-Level Architecture
+## 🧠 Architecture Overview
 
 ```
 Raw Network Logs
@@ -36,407 +34,232 @@ Raw Network Logs
         ↓
   Normalized Events
         ↓
-+-------------------+
-|   Detectors       |
-|-------------------|
-| SSH Detector      |
-| Port-Time Detector|
-| Beacon Detector   |
-+-------------------+
++----------------------+
+|      Detectors       |
+|----------------------|
+| SSH Detector         |
+| Port-Time Detector   |
+| Beaconing Detector   |
++----------------------+
         ↓
      Alerts
         ↓
 Correlation Engine
         ↓
-   Incidents
+   Incident Objects
+        ↓
+ Output: alerts.json
 ```
 
 ---
 
-## Event Model
+## 📌 What’s Included
 
-All detectors operate on a shared, normalized event structure, typically including:
+### 📂 Parser
 
-* `timestamp`
-* `src_ip`
-* `dst_ip`
-* `src_port`
-* `dst_port`
-* protocol / metadata
+A log parser reads structured logs, discards comments/invalid lines, and normalizes fields like:
 
-This allows detectors to remain independent while still producing alerts that can be meaningfully correlated.
+* timestamp
+* src_ip / dst_ip
+* ports
+* byte counts
+* description
 
----
-
-## Detectors
-
-Each detector focuses on a **single behavioral signal**:
-
-### SSH Detector
-
-Identifies suspicious SSH activity such as:
-
-* repeated authentication attempts
-* abnormal connection timing patterns
-
-### Port-Time Detector
-
-Flags unexpected port usage occurring:
-
-* outside expected time windows
-* on ports considered low-risk under normal conditions
-
-### Beacon Detector
-
-Detects potential command-and-control behavior by identifying:
-
-* regular, low-variance communication intervals
-* consistent destination patterns
-
-Each detector outputs **alerts**, not incidents.
+This allows detectors to operate on a *uniform event representation*.
 
 ---
 
-## Alert Structure
+## 🛡️ Detectors
 
-Detector alerts share a common schema, including:
+Each detector focuses on a specific **behavioral signal**:
 
-* `src_ip`
-* `dst_ip`
-* `start_time`
-* `end_time`
-* `detector`
-* `confidence`
+### 🔐 SSH Detector
 
-This consistency enables downstream correlation without detector-specific logic.
+Flags potential SSH brute force when there are many failed connection attempts within a short timeframe.
 
----
+### ⏰ Port-Time Detector
 
-## Correlation Engine (Design)
+Identifies unusual port usage occurring outside “normal business hours” or on ports not in the safe list.
 
-The correlation engine is responsible for turning multiple related alerts into a **single incident**.
+### 📡 Beaconing Detector
 
-### Core Correlation Principles
+Detects periodic communication indicative of beaconing (e.g., C2 traffic) by checking regular timing and uniform packet sizes.
 
-1. **Contextual Grouping**
+Each detector creates its own alert objects with:
 
-   * Alerts are grouped by `(src_ip, dst_ip)`
-   * This ensures only logically related activity is considered together
-
-2. **Time-Based Sliding Window**
-
-   * Alerts are sorted chronologically
-   * A sliding window (e.g. 10 minutes) is applied to find overlapping or near-overlapping alerts
-
-3. **Incident Creation**
-
-   * An incident is created when multiple alerts from different detectors occur within the window
-   * Incident start and end times are dynamically expanded as new alerts are added
-
-4. **Window Advancement**
-
-   * If a new alert falls outside the current incident window (plus tolerance), the incident is closed
-   * Correlation then resumes from the next alert
+* src_ip, dst_ip
+* confidence score
+* time interval
 
 ---
 
-## Incident Model
+## 🔗 Correlation Engine (Design & Behavior)
 
-An incident aggregates multiple alerts and includes:
+The core idea behind correlation is to build *incidents* — collections of related alerts — instead of reporting standalone alerts.
 
-* `src_ip`
-* `dst_ip`
-* `start_time`
-* `end_time`
-* `detectors_triggered`
-* `confidence`
-* `severity`
+### Core Principles
 
-This mirrors how real-world SOC tools summarize activity rather than flooding analysts with raw alerts.
+1. **Group by Flow Context**
+   Alerts are grouped by `(src_ip, dst_ip)`.
 
----
+2. **Temporal Reasoning**
+   Within each group, alerts are sorted chronologically and evaluated using adaptable time logic (not fixed windows).
 
-## Confidence & Severity
+3. **Incident Growth**
+   A new incident is created when alerts from multiple detectors fall close in time.
+   Incident intervals expand as more alerts arrive.
 
-* **Confidence** increases with:
+4. **Adaptive Closure**
+   When alerts fall outside a tolerance threshold, the active incident ends and a new one begins.
 
-  * number of detectors involved
-  * detector-specific confidence values
-* **Severity** can be derived from:
-
-  * detector combinations
-  * duration of activity
-  * persistence over time
-
-These values are intentionally transparent and tunable.
+This avoids rigid sliding windows and supports a richer incident timeline.
 
 ---
 
-## Design Philosophy
+## 📈 Incident Model
 
-* **Explainability over black-box ML**
-* **Composable detectors**
-* **Explicit correlation logic**
-* **Security-analyst-friendly output**
+Each generated incident includes:
 
-The engine is designed to be extended with additional detectors without rewriting correlation logic.
-
----
-
-## AI Usage Statement
-
-This project was developed with **AI-assisted support** used in a professional and intentional manner.
-
-AI was used to:
-
-* discuss architectural approaches to detection and correlation
-* validate assumptions about time-based correlation strategies
-* refine detector heuristics and edge-case handling
-* review and improve clarity of documentation
-
-All final design decisions, implementation details, and system integration were performed and validated by the author.
-AI assistance functioned as a **design reviewer and reasoning partner**, similar to peer review or rubber-duck debugging.
-
-This mirrors modern software development practices where AI tools are used to enhance productivity, reasoning quality, and documentation clarity.
+* Source and destination IP
+* Start and end time
+* Detectors involved
+* Confidence (aggregated from detector scores)
+* Severity (based on signal combination and persistence)
 
 ---
 
-## Future Improvements
+## 🧠 Design Philosophy
 
-* Additional detectors (DNS tunneling, HTTP anomalies)
-* Persistence-aware scoring across multiple incidents
-* Visualization of incidents over time
-* Export to SIEM-compatible formats
-
----
-
-## Why This Project Matters
-
-This project demonstrates:
-
-* applied security thinking
-* event-driven system design
-* correlation logic beyond simple rule-matching
-* realistic incident modeling
-
-It reflects how detection engineering and SOC tooling work in real environments, not just academic examples.
+* **Explainability over black box** – No ML models; all logic is transparent
+* **Composable detectors** – Add new detectors without rewriting correlation logic
+* **Temporal continuity** – Incidents are defined by evolving timing, not fixed buckets
+* **SOC-friendly output** – Structured JSON suitable for analysts or SIEM ingestion
 
 ---
 
-## Correlation Flow (ASCII Diagrams)
+## 🤖 AI Usage Statement
 
-### 1. Alert Generation Flow
+AI assistance was used as a **design reviewer and reasoning partner**, not as an autopilot code generator. AI support helped with:
 
-This shows how raw data becomes detector alerts before correlation even begins.
+* Architectural exploration and alternatives
+* Temporal correlation logic validation
+* Edge case reasoning and detector design discussion
+* Improving documentation clarity
+
+All final design decisions, implementation logic, and structure were conceived and authored by the project maintainer.
+
+This mirrors modern engineering workflows where AI tools serve as *peer reviewers and sounding boards*.
+
+---
+
+## 🧾 Design Process & Sketches
+
+Below are key stages of the design process that guided implementation:
+
+### 📝 Early Correlation Concept
+
+(*Insert your photo here: initial plan*)
+
+> This sketch shows my first attempt at grouping and correlating events.
+
+### 🔄 Refined Correlation Model
+
+(*Insert your amended sketches here*)
+
+> Revised logic supporting dynamic incident extension and tolerance-based grouping.
+
+### 📊 Correlation Flow (ASCII diagrams)
 
 ```
 Raw Logs
    |
-   v
-+------------------+
-|  Log Parser      |
-|------------------|
-| Normalize fields |
-| Extract timing   |
-| Extract IPs      |
-+------------------+
+Parser
    |
-   v
 Normalized Events
    |
-   v
-+----------------------------+
-|        Detectors           |
-|----------------------------|
-| SSH Detector               |
-| Port-Time Detector         |
-| Beacon Detector            |
-+----------------------------+
+Detectors
    |
-   v
-Detector Alerts
-```
-
-Each detector operates **independently** and emits alerts without awareness of other detectors.
-
----
-
-### 2. Correlation Engine – Grouping Phase
-
-Alerts are grouped by shared network context to avoid unrelated correlations.
-
-```
-All Alerts
-   |
-   v
-Group by (src_ip, dst_ip)
-   |
-   +----------------------+
-   |                      |
-   v                      v
-Group A               Group B
-(10.0.0.5 → 8.8.8.8)  (10.0.0.7 → 1.1.1.1)
-```
-
-Only alerts within the **same group** are ever considered for correlation.
-
----
-
-### 3. Correlation Engine – Sliding Window
-
-Within each group, alerts are sorted and evaluated over time.
-
-```
-Time →
-[E1]----[E2]--------[E3]----[E4]
-
-<------ 600s window ------>
-
-Window contents:
-[E1, E2, E3]
-```
-
-Rules:
-
-* Alerts must fall within the time window
-* Multiple detectors must be represented
-* Single-alert windows are ignored
-
----
-
-### 4. Incident Creation Logic
-
-An incident begins when correlation conditions are met.
-
-```
-E1 (SSH)        E2 (Port-Time)
-|---------------|
-        |
-        v
-   Create Incident
-   st = E1.start
-   et = E2.end
-   detectors = {SSH, Port-Time}
-```
-
-The incident’s time range is **derived from alert timing**, not fixed.
-
----
-
-### 5. Incident Extension (Sliding Window Amendment)
-
-As new alerts arrive, the incident may be extended.
-
-```
-Current Incident:
-[--------------------]
-
-New Alert (E3)
-              [----]
-
-If:
-E3.start <= incident.end + tolerance
-
-Then:
-incident.end = E3.end
-incident.detectors += {Beacon}
-```
-
-This allows sustained or evolving behavior to remain part of the same incident.
-
----
-
-### 6. Incident Closure & Window Advancement
-
-If no alerts fall within the tolerance window:
-
-```
-Incident End
-[--------------------]
-
-Next Alert
-                      [----]
-
-Result:
-✔ Close incident
-→ Start new correlation window
-```
-
-This prevents unrelated activity from being merged incorrectly.
-
----
-
-## Correlation Summary Diagram
-
-```
 Alerts
-  |
-  v
-Group by src/dst
-  |
-  v
+   |
+Group by (src, dst)
+   |
 Sort by time
-  |
-  v
-Sliding Window
-  |
-  +--> Single detector → ignore
-  |
-  +--> Multiple detectors
-          |
-          v
-      Create / Extend Incident
-          |
-          v
-      Close when window breaks
+   |
+Sliding window logic
+   |
+Create / Extend Incidents
 ```
 
 ---
 
-## Why This Design Works
+## 🛠 Getting Started
 
-* Prevents alert flooding
-* Preserves temporal causality
-* Encourages multi-signal confidence
-* Matches real SOC correlation logic
+### 🧾 Requirements
 
-## Correlation Engine – Design Evolution
+* Python 3.x
+* `ports.txt`
+* `logs.txt`
 
-### Initial Approach
-The first version of the correlation engine was designed to correlate alerts from two detectors: SSH brute-force activity and suspicious port usage. Correlation was performed using explicit pairwise logic, matching alerts with the same source and destination IPs and overlapping time windows.
+### 🟢 Run
 
-This approach was intentionally simple and effective for a two-detector system, allowing clear reasoning about confidence scoring and alert independence.
+```bash
+python3 main.py
+```
 
-### Limitation Discovered
-After introducing a third detector (beaconing activity), the original design no longer scaled cleanly. Pairwise correlation logic would have required detector-specific nesting and special cases, making the system harder to extend and maintain.
+This will produce an `alerts.json` file with all correlated incidents.
 
-This exposed a core limitation:
-- Correlation logic was detector-aware instead of alert-aware.
+---
 
-### Revised Approach
-The correlation engine was redesigned to operate on generic alert objects rather than detector pairs. Alerts are now:
-1. Aggregated from all detectors
-2. Grouped by source and destination IP
-3. Sorted chronologically
-4. Evaluated using a sliding time window
+## 📦 Output
 
-If multiple alerts from different detectors appear within the same window, they are merged into a single incident.
+The output format is structured JSON:
 
-This design allows:
-- Arbitrary numbers of detectors
-- Incremental incident growth
-- Detector-agnostic correlation logic
+```json
+[
+  {
+    "type": "Correlated Alert",
+    "src_ip": "10.0.0.5",
+    "dst_ip": "192.168.1.10",
+    "detectors": ["SSH Brute Force","Suspicious port usage","Beaconing"],
+    "confidence": 0.84,
+    "start_time": "2025-02-01T18:02:00Z",
+    "end_time": "2025-02-01T18:15:32Z"
+  }
+]
+```
 
-## Redesign Process
+---
 
-### Early Correlation Concept
-![Initial correlation sketch](images/Correlation_Logic_V1.png)
+## 📌 Future Improvements
 
-This sketch represents my initial approach to alert grouping and time-based correlation.
+Ideas for improvement include:
 
-### Revised Correlation Flow
-![Amended correlation sketch](images/Correlation_Logic_V2.png)
+* More detectors (DNS anomalies, HTTP anomalies)
+* Real-time streaming support
+* SIEM-compatible exports
+* UIs or visual timelines
 
-![Ammendment](images/Correlation_Logic_V2a.png)
+---
 
-After implementing detectors, I refined the design to support sliding windows and incident extension.
+## ⭐ Why This Project Matters
+
+This project demonstrates:
+
+* Applied detection engineering
+* Temporal correlation logic
+* Multi-signal incident modeling
+* Realistic SOC-style reasoning
+
+It shows **not just a script**, but a **thinking process** behind how real detection systems evolve.
+
+---
+
+## 📁 Files & Structure
+
+* `parse.py` – Log parsing
+* `detectors.py` – Modular detectors
+* `correlator.py` – Engine that builds incidents
+* `main.py` – Entry point
+* `alerts.json` – Output
+
+---
