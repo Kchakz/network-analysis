@@ -400,3 +400,42 @@ Sliding Window
 * Encourages multi-signal confidence
 * Matches real SOC correlation logic
 
+## Correlation Engine – Design Evolution
+
+### Initial Approach
+The first version of the correlation engine was designed to correlate alerts from two detectors: SSH brute-force activity and suspicious port usage. Correlation was performed using explicit pairwise logic, matching alerts with the same source and destination IPs and overlapping time windows.
+
+This approach was intentionally simple and effective for a two-detector system, allowing clear reasoning about confidence scoring and alert independence.
+
+### Limitation Discovered
+After introducing a third detector (beaconing activity), the original design no longer scaled cleanly. Pairwise correlation logic would have required detector-specific nesting and special cases, making the system harder to extend and maintain.
+
+This exposed a core limitation:
+- Correlation logic was detector-aware instead of alert-aware.
+
+### Revised Approach
+The correlation engine was redesigned to operate on generic alert objects rather than detector pairs. Alerts are now:
+1. Aggregated from all detectors
+2. Grouped by source and destination IP
+3. Sorted chronologically
+4. Evaluated using a sliding time window
+
+If multiple alerts from different detectors appear within the same window, they are merged into a single incident.
+
+This design allows:
+- Arbitrary numbers of detectors
+- Incremental incident growth
+- Detector-agnostic correlation logic
+
+## Redesign Process
+
+### Early Correlation Concept
+![Initial correlation sketch](docs/images/Correlation_Logic_V1.png)
+
+This sketch represents my initial approach to alert grouping and time-based correlation.
+
+### Revised Correlation Flow
+![Amended correlation sketch](docs/images/Correlation_Logic_V2.png)
+![Ammendment](docs/images/Correlation_Logic_V2a.png)
+
+After implementing detectors, I refined the design to support sliding windows and incident extension.
